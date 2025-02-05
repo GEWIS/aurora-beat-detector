@@ -1,60 +1,29 @@
-# Onset Beat Detection to OSC
-[![Cross Compile Manual workflow](https://github.com/zak-45/WLEDAudioSyncRTBeat/actions/workflows/manual.yml/badge.svg)](https://github.com/zak-45/WLEDAudioSyncRTBeat/actions/workflows/manual.yml)
+# Aurora Beat Detector
 
 This is a simple beat detector built with [aubio](https://github.com/aubio/aubio).
 It will detect the beat and BPM on the default audio input.
-On every beat, the current BPM is sent to one or more OSC servers.
+When the BPM changes, this update is sent to [Aurora Core](https://github.com/gewis/aurora-core) over HTTP(S).
 
-Command line only.
- 
-This is a feature of [WLEDAudioSync Chataigne Module](https://github.com/zak-45/WLEDAudioSync-Chataigne-Module).
-
-You can see a demo here : [WLEDAudioSyncRTBeat demo](https://youtu.be/VXM_zEzKo6M)
-
-Chataigne view:
-![image](https://github.com/zak-45/WLEDAudioSyncRTBeat/assets/121941293/89b89dbf-49bb-410e-8d7b-2c43357c5100)
-
-
+## Prerequisites
+- Python 3.11
 
 ## Installation
-
-Win / Mac / Linux
-
-Take your release from there : https://github.com/zak-45/WLEDAudioSyncRTBeat/releases
-
-```
-No python need.
-This is a portable version, put it on a nice folder and just run it according your OS.
-```
-
-** INFO **
----
-Some anti virus could warn you, this is false positive.
-If you do not trust you can still proceed with step below.
----
-
-Other OS / all OS with Python installed 
-
-Install required modules
-```
-pip install -r requirements.txt
-```
-
-download WLEDAudioSyncRTBeat.py file and run it:
-```
-python WLEDAudioSyncRTBeat.py
-``` 
+- Create a virtual environment `python -m venv venv`.
+- Activate the virtual environment `.\venv\Scripts\activate.bat` or `.\venv\Scripts\activate`.
+- Install requirements `pip install -r requirements.txt`. Note that the first time installating `aubio` might fail.
+A retry (or manually installing numpy first) should resolve this issue. 
 
 ## Usage
 
 ```
-WLEDAudioSyncRTBeat-{OS} beat|list [-h] -s IP PORT ADDRESS MODE [-b BUFSIZE] [-v] [-d DEVICE]
+WLEDAudioSyncRTBeat-{OS} beat|list [-h] -s SERVER_URL -k API_KEY [-b BUFSIZE] [-v] [-d DEVICE]
 
 optional arguments:
   -h, --help            show this help message and exit
-  -s IP PORT ADDRESS MODE, --server IP PORT ADDRESS
-                        OSC Server address (multiple can be provided)
-                        MODE can be PLAIN (bpm), HALF (bpm / 2), GMA3 sqrt(bpm / 240) * 100, default to PLAIN
+  -s SERVER, --server SERVER
+                        HTTP(S) root address of the Aurora Core instance
+  -k API_KEY, --api-key API_KEY
+                        API Key of the integration user to authenticate as
   -b BUFSIZE, --bufsize BUFSIZE
                         Size of audio buffer for beat detection (default: 512)
   -v, --verbose         Print BPM on beat / dB
@@ -64,7 +33,10 @@ optional arguments:
 ```
 
 ### `-s`/`--server`
-Add an `IP`, `PORT` and OSC `ADDRESS` to which the BPM beat signal will be sent to. Example: `-s 127.0.0.1 21000 /foo/beat`
+The HTTP(S) address pointing to the Aurora core. For local installations, this is probably `http://localhost:3000`.
+
+### `-k`/`api-key`
+The API Key used to authenticate with Aurora.
 
 ### `-b`/`--bufsize`
 Select the size of the buffer used for beat detection.
@@ -84,22 +56,10 @@ Run `WLEDAudioSyncRTBeat list` to get all available devices.
 ## Example
 
 ```
-$ WLEDAudioSyncRTBeat-Linux beat -s 127.0.0.1 12000 /WLEDAudioSync/BPM -s 10.10.13.37 12345 /test/baz GMA3 -v
+$ WLEDAudioSyncRTBeat-Linux beat -s http://localhost:3000 -k ABCD -v
 ```
-
-This will send beat messages to the OSC address `/WLEDAudioSync/BPM ` on `127.0.0.1:12000` and `/test/baz` on `10.10.13.37:12345`.
-Additionally, the current BPM will be printed to stdout, and for 10.10.13.37 will send GMA3 bpm value
-
-## Info 
-
-```
-First time you run WLEDAudioSyncRTBeat-{OS},
-this will create folder ./WLEDAudioSyncRTBeat and extract all files on it.
-
-To save some space and time,
-you can then delete WLEDAudioSyncRTBeat-* and run the app from created folder.
-```
+This will send all BPM changes to a local installation of Aurora.
 
 ## Credits
 
-Thanks to :  https://github.com/DrLuke/aubio-beat-osc.
+Thanks to: https://github.com/zak-45/WLEDAudioSyncRTBeat and https://github.com/DrLuke/aubio-beat-osc.
