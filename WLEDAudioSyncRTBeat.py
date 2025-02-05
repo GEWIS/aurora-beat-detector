@@ -5,10 +5,10 @@ import signal
 import os
 import time
 import sys
-import math
 
 import argparse
 
+import requests
 
 parser = argparse.ArgumentParser()
 sp = parser.add_subparsers(dest="command")
@@ -16,14 +16,9 @@ sp = parser.add_subparsers(dest="command")
 beat_parser = sp.add_parser("beat",
                             help="Start beat detection")
 beat_parser.add_argument("-s", "--server",
-                         help="OSC Server address (multiple can be provided) in format 'IP' 'PORT' 'PATH' 'MODE', "
-                              "Mode PLAIN for plain BPM-Value,Mode HALF for half of BPM-Value, "
-                              "Mode GMA3 for GrandMA3 Speed masters where 100 percent is for 240BPM. "
-                              "  MODE is optional and default to PLAIN"
-                              " e.g. 127.0.0.1 12000 /test GMA3",
-                         nargs='*',
-                         action="append"
-                         )
+                         help="HTTP(S) root path of the Aurora instance")
+beat_parser.add_argument("-k", "--api-key",
+                         help="API Key used to authenticate as an integration user with Aurora")
 beat_parser.add_argument("-b", "--bufsize",
                          help="Size of audio buffer for beat detection (default: 512)", default=512,
                          type=int)
@@ -38,6 +33,41 @@ list_parser = sp.add_parser("list",
 args = parser.parse_args()
 
 
+class AuroraServer:
+    def __init__(self, address: str, api_key: str):
+        self.url = address
+        self.api_key = api_key
+        self.cookies = {}
+        self.authenticate()
+        self.set_bpm(100)
+
+    def authenticate(self):
+        auth_url = self.url + '/api/auth/key'
+        result = requests.post(auth_url, {'key': self.api_key})
+
+        # No connection could be made, so throw error
+        if result.status_code != 200:
+            json = result.json()
+            raise Exception("Could not authenticate with core: [HTTP {}]: {}".format(
+                result.status_code,
+                json['details'] if json['details'] else json['message']),
+            )
+
+        self.cookies = result.cookies
+
+    def set_bpm(self, bpm: int):
+        set_bpm_url = self.url + '/api/beat-generator'
+        result = requests.post(set_bpm_url, {'bpm': bpm}, cookies=self.cookies)
+
+        if result.status_code == 401:
+            self.authenticate()
+            self.set_bpm(bpm)
+            return
+        elif result.status_code != 204:
+            json = result.json()
+            raise Exception("Could not set BPM: [HTTP {}]".format(result.status_code))
+
+
 class BeatPrinter:
     def __init__(self):
         self.state: int = 0
@@ -49,8 +79,10 @@ class BeatPrinter:
 
 
 class BeatDetector:
-    def __init__(self, buf_size: int):
+    def __init__(self, buf_size: int, server: AuroraServer):
         self.buf_size: int = buf_size
+        self.server = server
+        self.last_bpm = 0
 
         # Set up pyaudio and aubio beat detector
         self.audio: pyaudio.PyAudio = pyaudio.PyAudio()
@@ -86,13 +118,15 @@ class BeatDetector:
             # volume level in db
             dbs = aubio.db_spl(aubio.fvec(audio_data))
             bpm = self.tempo.get_bpm()
-            # recalculate half BPM
-            bpmh = bpm / 2
-            # recalculate BPM for GrandMA3
-            bpmg = math.sqrt(bpm / 240) * 100
 
             if args.verbose:
                 self.spinner.print_bpm(bpm, dbs)
+
+            # Only transmit a new BPM if the bpm has actually changed
+            bpm_rounded = round(bpm)
+            if bpm_rounded != self.last_bpm:
+                self.server.set_bpm(bpm_rounded)
+                self.last_bpm = bpm_rounded
 
 
         return None, pyaudio.paContinue  # Tell pyAudio to continue
@@ -125,8 +159,13 @@ def main():
         return
 
     if args.command == "beat":
+        if args.server is None:
+            parser.error('Expected Aurora server address')
+        if args.api_key is None:
+            parser.error('Expected Aurora API key')
 
-        bd = BeatDetector(args.bufsize)
+        server = AuroraServer(args.server, args.api_key)
+        bd = BeatDetector(args.bufsize, server)
 
         # capture ctrl+c to stop gracefully process
         def signal_handler(none, frame):
