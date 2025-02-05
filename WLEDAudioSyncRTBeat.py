@@ -6,20 +6,8 @@ import os
 import time
 import sys
 import math
-import ipaddress
 
 import argparse
-
-from pythonosc.udp_client import SimpleUDPClient
-
-from typing import List, NamedTuple, Tuple
-
-
-class ServerInfo(NamedTuple):
-    ip: str
-    port: int
-    address: str
-    mode: str = None
 
 
 parser = argparse.ArgumentParser()
@@ -61,9 +49,8 @@ class BeatPrinter:
 
 
 class BeatDetector:
-    def __init__(self, buf_size: int, server_info: List[ServerInfo]):
+    def __init__(self, buf_size: int):
         self.buf_size: int = buf_size
-        self.server_info: List[ServerInfo] = server_info
 
         # Set up pyaudio and aubio beat detector
         self.audio: pyaudio.PyAudio = pyaudio.PyAudio()
@@ -83,10 +70,6 @@ class BeatDetector:
 
         # tempo detection
         self.tempo: aubio.tempo = aubio.tempo("default", fft_size, self.buf_size, samplerate)
-
-        # Set up OSC servers to send beat data to
-        self.osc_servers: List[Tuple[SimpleUDPClient, str]] = [(SimpleUDPClient(x.ip, x.port), x.address) for x in
-                                                               self.server_info]
 
         # print info
         self.spinner: BeatPrinter = BeatPrinter()
@@ -111,16 +94,6 @@ class BeatDetector:
             if args.verbose:
                 self.spinner.print_bpm(bpm, dbs)
 
-            for server, server_info in zip(self.osc_servers, self.server_info):
-                mode = server_info.mode
-                if mode is None:
-                    mode = 'plain'
-                if mode.lower() == "half":
-                    server[0].send_message(server[1], bpmh)
-                elif mode.lower() == "gma3":
-                    server[0].send_message(server[1], bpmg)
-                else:
-                    server[0].send_message(server[1], bpm)
 
         return None, pyaudio.paContinue  # Tell pyAudio to continue
 
@@ -152,39 +125,8 @@ def main():
         return
 
     if args.command == "beat":
-        # Ensure at least 3 arguments are provided for server
-        if args.server is None:
-            parser.error('At least 3 server arguments are required ("IP","PORT","PATH")')
 
-        # select 4 args
-        server_info_4: List[ServerInfo] = [ServerInfo(x[0], int(x[1]), x[2], x[3]) for x in args.server if len(x) == 4]
-        # select 3 args
-        server_info_3: List[ServerInfo] = [ServerInfo(x[0], int(x[1]), x[2]) for x in args.server if len(x) == 3]
-        # final
-        server_info = server_info_3 + server_info_4
-
-        # some checks
-        for x in args.server:
-            if len(x) < 3:
-                parser.error('At least 3 server arguments are required ("IP","PORT","PATH")')
-                sys.exit(1)
-            elif len(x) > 4:
-                parser.error('More than 4 arguments provided for server')
-                sys.exit(2)
-
-        for item in server_info:
-            # now check validate arguments
-            try:
-                ipaddress.ip_address(item.ip)
-            except ValueError:
-                print(f'Not a valid IP address: {item.ip}')
-                sys.exit(3)
-
-            if not item.address.startswith('/'):
-                print(f'PATH {item.address} not valid, need to start with "/"')
-                sys.exit(4)
-
-        bd = BeatDetector(args.bufsize, server_info)
+        bd = BeatDetector(args.bufsize)
 
         # capture ctrl+c to stop gracefully process
         def signal_handler(none, frame):
