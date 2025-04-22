@@ -37,30 +37,13 @@ class AuroraServer:
     def __init__(self, address: str, api_key: str):
         self.url = address
         self.api_key = api_key
-        self.cookies = {}
-        self.authenticate()
-        self.set_bpm(100)
-
-    def authenticate(self):
-        auth_url = self.url + '/api/auth/key'
-        result = requests.post(auth_url, {'key': self.api_key})
-
-        # No connection could be made, so throw error
-        if result.status_code != 200:
-            json = result.json()
-            raise Exception("Could not authenticate with core: [HTTP {}]: {}".format(
-                result.status_code,
-                json['details'] if json['details'] else json['message']),
-            )
-
-        self.cookies = result.cookies
 
     def set_bpm(self, bpm: int):
-        set_bpm_url = self.url + '/api/beat-generator'
-        result = requests.post(set_bpm_url, {'bpm': bpm}, cookies=self.cookies)
+        set_bpm_url = self.url + '/api/beat-generator/real-time'
+        headers = { 'x-api-key': self.api_key }
+        result = requests.post(set_bpm_url, {'bpm': bpm}, headers=headers)
 
         if result.status_code == 401:
-            self.authenticate()
             self.set_bpm(bpm)
             return
         elif result.status_code != 204:
