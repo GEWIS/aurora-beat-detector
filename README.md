@@ -6,6 +6,10 @@ When the BPM changes, this update is sent to [Aurora Core](https://github.com/ge
 
 ## Prerequisites
 - Python 3.11
+- A working instance of [Aurora Core](https://github.com/gewis/aurora-core). Within this instance, create a new
+integration dedicated for this beat detector. The integration should have access to all endpoints regarding the
+real time beat detector (setting the BPM and stopping). Without the correct access rights, the program might crash
+due to an HTTP 403!
 
 ## Installation
 - Create a virtual environment `python -m venv venv`.
@@ -56,7 +60,7 @@ Run `WLEDAudioSyncRTBeat list` to get all available devices.
 ## Example
 
 ```
-$ WLEDAudioSyncRTBeat-Linux beat -s http://localhost:3000 -k ABCD -v
+$ WLEDAudioSyncRTBeat beat -s http://localhost:3000 -k ABCD -v
 ```
 This will send all BPM changes to a local installation of Aurora.
 
